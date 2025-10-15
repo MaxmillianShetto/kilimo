@@ -1,6 +1,6 @@
 export function Footer() {
   return (
-    <footer className="border-t bg-gray-50 dark:bg-gray-900">
+    <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
       <div className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">
         United States
       </div>
