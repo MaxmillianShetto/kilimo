@@ -3,10 +3,605 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "sqlite" // dev; will become "postgresql" in prod
   url      = env("DATABASE_URL")
 }
+
+model Tenant {
+  id            String         @id @default(cuid())
+  name          String
+  country       String         // ISO code e.g., "TZ"
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tier          SubscriptionTier @default(FREE)
+  addOns        Json?          // e.g., { "machineryTracking": true }
+  enableMarket  Boolean        @default(false) // Opt-in to Kilimo Market
+  users         User[]
+  subscriptions Subscription[]
+  farms         Farm[]
+  accounts      Account[]
+  crops         Crop[]
+  seasons       Season[]
+  activities    Activity[]
+  resources     ResourceInput[]
+  expenses      Expense[]
+  revenues      Revenue[]
+  journalEntries JournalEntry[]
+  marketPrices  MarketPrice[]
+  reminders     Reminder[]
+  machines      Machine[]
+  fuelLogs      FuelLog[]
+  trainings     TrainingSession[]
+  trainingAttendance TrainingAttendance[]
+  jobs          JobPosting[]
+  jobAssignments JobAssignment[]
+
+  // Marketplace (sister product)
+  listings            Listing[]
+  listingInventories  ListingInventory[]
+  listingInquiries    ListingInquiry[]
+  marketplaceFees     MarketplaceFee[]
+}
+
+enum SubscriptionTier {
+  FREE
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+model Subscription {
+  id        String           @id @default(cuid())
+  tenantId  String
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tier      SubscriptionTier
+  startAt   DateTime         @default(now())
+  endAt     DateTime?
+  status    SubscriptionStatus @default(ACTIVE)
+  quotas    Json?            // { farms: 2, attendants: 10, reminders: 500, ... }
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model User {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email     String    @unique
+  name      String
+  phone     String?
+  role      UserRole  @default(ATTENDANT)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  ACCOUNTANT
+  ATTENDANT
+  OPERATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  INVITED
+}
+
+model Farm {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  region     String?  // Country-specific region name
+  latitude   Float?
+  longitude  Float?
+  areaHa     Float?   // Hectares
+  address    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  seasons    Season[]
+  machines   Machine[]
+  fuelLogs   FuelLog[]
+}
+
+model Crop {
+  id         String   @id @default(cuid())
+  tenantId   String   // allow per-tenant customization; could be null for global catalog in future
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String   // e.g., "maize"
+  type       String   // "field", "fish", "bee", "livestock-feed"
+  variety    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  seasons    Season[]
+}
+
+model Season {
+  id            String    @id @default(cuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  farmId        String
+  farm          Farm      @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  cropId        String
+  crop          Crop      @relation(fields: [cropId], references: [id], onDelete: Restrict)
+  name          String    // e.g., "Maize 2025 S1"
+  startDate     DateTime
+  endDate       DateTime?
+  areaHa        Float?
+  status        SeasonStatus @default(PLANNED)
+  expectedYield Float?
+  variety       String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  activities    Activity[]
+}
+
+enum SeasonStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELED
+}
+
+model Activity {
+  id            String     @id @default(cuid())
+  tenantId      String
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  seasonId      String?
+  season        Season?    @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  farmId        String
+  farm          Farm       @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  type          ActivityType
+  plannedDate   DateTime
+  actualDate    DateTime?
+  status        ActivityStatus @default(SCHEDULED)
+  notes         String?
+  assignedToId  String?
+  assignedTo    User?      @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  machineId     String?
+  machine       Machine?   @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  usages        ActivityUsage[]
+  laborEntries  LaborEntry[]
+  machineUsages MachineUsage[]
+  expenses      Expense[]   @relation("ActivityExpenses")
+  revenues      Revenue[]   @relation("ActivityRevenues")
+}
+
+enum ActivityType {
+  LAND_PREP
+  PLANTING
+  WEEDING
+  FERTILIZATION
+  SPRAYING
+  IRRIGATION
+  HARVEST
+  POND_FEEDING
+  HIVE_MAINTENANCE
+  VACCINATION
+  DIPPING
+  OTHER
+}
+
+enum ActivityStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+model ResourceInput {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  unit       String   // kg, l, unit
+  defaultCost Float?
+  supplier   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ActivityUsage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  resourceId String
+  resource   ResourceInput @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  quantity   Float
+  unitCost   Float?
+  totalCost  Float?
+  createdAt  DateTime @default(now())
+}
+
+model LaborEntry {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  workerId   String?  // could link to User or external contractor record later
+  workerName String?
+  hours      Float
+  rate       Float
+  totalCost  Float    // rate * hours
+  createdAt  DateTime @default(now())
+}
+
+model Machine {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  farmId     String?
+  farm       Farm?    @relation(fields: [farmId], references: [id], onDelete: SetNull)
+  type       String   // "tractor", "harvester", etc.
+  make       String?
+  model      String?
+  serial     String?
+  acquisitionDate DateTime?
+  status     MachineStatus @default(ACTIVE)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  usages     MachineUsage[]
+  fuelLogs   FuelLog[]
+}
+
+enum MachineStatus {
+  ACTIVE
+  MAINTENANCE
+  RETIRED
+}
+
+model MachineUsage {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  machineId  String
+  machine    Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  hours      Float?
+  hectare    Float?
+  tonnage    Float?
+  rate       Float?
+  cost       Float?
+  createdAt  DateTime @default(now())
+}
+
+model FuelLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  machineId  String?
+  machine    Machine? @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  farmId     String?
+  farm       Farm?    @relation(fields: [farmId], references: [id], onDelete: SetNull)
+  date       DateTime
+  liters     Float
+  cost       Float
+  supplier   String?
+  meterReading Float?
+  notes      String?
+  createdAt  DateTime @default(now())
+}
+
+model Account {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code       String
+  name       String
+  type       AccountType
+  taxCategory String?
+  parentId   String?
+  parent     Account? @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Account[] @relation("AccountHierarchy")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([tenantId, code])
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date        DateTime
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  amount      Float
+  vendor      String?
+  memo        String?
+  linkedType  String?  // "Activity" | "Season" | "Farm"
+  linkedId    String?
+  activity    Activity? @relation("ActivityExpenses", fields: [linkedId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Revenue {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date        DateTime
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  amount      Float
+  buyer       String?
+  commodity   String?  // free text for now or link to Crop later
+  quantity    Float?
+  unitPrice   Float?
+  memo        String?
+  linkedType  String?
+  linkedId    String?
+  activity    Activity? @relation("ActivityRevenues", fields: [linkedId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model JournalEntry {
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  date        DateTime    @default(now())
+  memo        String?
+  sourceRef   String?     // expenseId/revenueId/importId
+  createdAt   DateTime    @default(now())
+  lines       JournalLine[]
+}
+
+model JournalLine {
+  id          String      @id @default(cuid())
+  entryId     String
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit       Float       @default(0)
+  credit      Float       @default(0)
+  farmId      String?
+  seasonId    String?
+  cropId      String?
+  activityId  String?
+}
+
+model MarketPrice {
+  id         String   @id @default(cuid())
+  tenantId   String?  // null = global public price; tenant-specific overrides possible
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  country    String
+  region     String
+  commodity  String
+  date       DateTime
+  price      Float
+  currency   String    // "TZS"
+  unit       String    // "kg", "ton"
+  source     String
+  createdAt  DateTime  @default(now())
+  @@index([country, region, commodity, date])
+}
+
+// Reminders
+model Reminder {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  dueAt      DateTime
+  channel    ReminderChannel
+  status     ReminderStatus @default(PENDING)
+  attempts   Int      @default(0)
+  lastError  String?
+  createdAt  DateTime @default(now())
+}
+
+enum ReminderChannel {
+  EMAIL
+  SMS
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELED
+}
+
+// Training
+model TrainingSession {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  topic      String
+  trainer    String?
+  dateTime   DateTime
+  location   String?
+  latitude   Float?
+  longitude  Float?
+  materialsURL String?
+  createdAt  DateTime @default(now())
+  attendance TrainingAttendance[]
+}
+
+model TrainingAttendance {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name       String?  // for non-user participants
+  status     AttendanceStatus @default(ATTENDED)
+  score      Float?
+  notes      String?
+}
+
+enum AttendanceStatus {
+  ATTENDED
+  ABSENT
+  EXCUSED
+}
+
+// Jobs (Labor & Hiring)
+model JobPosting {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  title      String
+  requiredSkills String?
+  startDate  DateTime?
+  endDate    DateTime?
+  rate       Float?   // per hour or per unit
+  rateUnit   String?  // "hour", "ha", "ton"
+  status     JobStatus @default(OPEN)
+  createdAt  DateTime @default(now())
+  assignments JobAssignment[]
+}
+
+enum JobStatus {
+  OPEN
+  ASSIGNED
+  COMPLETED
+  CANCELED
+}
+
+model JobAssignment {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jobId      String
+  job        JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  contractor String?   // external hire name
+  hoursPlanned Float?
+  hoursActual  Float?
+  approvedBy  String?
+  status     AssignmentStatus @default(ASSIGNED)
+  createdAt  DateTime @default(now())
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  COMPLETED
+  CANCELED
+}
+
+// Kilimo Market (sister product)
+// Public Listings (opt-in at tenant level)
+model Listing {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title      String
+  commodity  String
+  variety    String?
+  grade      String?
+  region     String?
+  price      Float?
+  currency   String? // default from tenant country
+  unit       String? // kg, ton, bag
+  minLotSize Float?
+  images     Json?
+  status     ListingStatus @default(DRAFT)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  inventory  ListingInventory[]
+}
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  SOLD_OUT
+  ARCHIVED
+}
+
+model ListingInventory {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  quantity   Float    // available
+  reserved   Float    @default(0)
+  unit       String   // kg, ton, bag
+  updatedAt  DateTime @updatedAt
+}
+
+model ListingInquiry {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyerName  String
+  buyerContact String
+  message    String?
+  status     InquiryStatus @default(OPEN)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum InquiryStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+// Marketplace fees (commission or brokerage)
+model MarketplaceFeePolicy {
+  id           String   @id @default(cuid())
+  commodity    String
+  country      String
+  commissionPct Float?  // e.g., 2.5
+  brokerageFlat Float?  // flat fee per listing or per lot
+  negotiable    Boolean @default(true)
+  effectiveAt   DateTime @default(now())
+}
+
+model MarketplaceFee {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  listingId  String?
+  listing    Listing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  revenueId  String?  // link to Revenue in Kilimo SaaS if sale went through accounting
+  amount     Float
+  currency   String   // e.g., TZS
+  model      FeeModel // COMMISSION or BROKERAGE
+  details    Json?
+  createdAt  DateTime @default(now())
+}
+
+enum FeeModel {
+  COMMISSION
+  BROKERAGE
+}
+
+
+
+
