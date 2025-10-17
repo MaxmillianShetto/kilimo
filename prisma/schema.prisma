@@ -38,6 +38,9 @@ model Tenant {
   trainingAttendance TrainingAttendance[]
   jobs          JobPosting[]
   jobAssignments JobAssignment[]
+  activityUsages ActivityUsage[]
+  laborEntries  LaborEntry[]
+  machineUsages MachineUsage[]
 
   // Marketplace (sister product)
   listings            Listing[]
@@ -83,6 +86,10 @@ model User {
   status    UserStatus @default(ACTIVE)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  assignedActivities Activity[]
+  reminders Reminder[]
+  trainingAttendance TrainingAttendance[]
+  jobAssignments JobAssignment[]
 }
 
 enum UserRole {
@@ -114,6 +121,7 @@ model Farm {
   seasons    Season[]
   machines   Machine[]
   fuelLogs   FuelLog[]
+  activities Activity[]
 }
 
 model Crop {
@@ -179,6 +187,8 @@ model Activity {
   machineUsages MachineUsage[]
   expenses      Expense[]   @relation("ActivityExpenses")
   revenues      Revenue[]   @relation("ActivityRevenues")
+  reminders     Reminder[]
+  jobPostings   JobPosting[]
 }
 
 enum ActivityType {
@@ -213,6 +223,7 @@ model ResourceInput {
   supplier   String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  usages     ActivityUsage[]
 }
 
 model ActivityUsage {
@@ -259,6 +270,7 @@ model Machine {
   updatedAt  DateTime @updatedAt
   usages     MachineUsage[]
   fuelLogs   FuelLog[]
+  activities Activity[]
 }
 
 enum MachineStatus {
@@ -313,6 +325,9 @@ model Account {
   children   Account[] @relation("AccountHierarchy")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  expenses   Expense[]
+  revenues   Revenue[]
+  journalLines JournalLine[]
   @@unique([tenantId, code])
 }
 
@@ -447,6 +462,8 @@ model TrainingSession {
 
 model TrainingAttendance {
   id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sessionId  String
   session    TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   userId     String?
@@ -530,6 +547,8 @@ model Listing {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   inventory  ListingInventory[]
+  inquiries  ListingInquiry[]
+  fees       MarketplaceFee[]
 }
 
 enum ListingStatus {
@@ -601,7 +620,3 @@ enum FeeModel {
   COMMISSION
   BROKERAGE
 }
-
-
-
-
