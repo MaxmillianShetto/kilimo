@@ -584,6 +584,7 @@ model User {
   jobAssignments JobAssignment[]
 }
 
+
 model Tenant {
   id            String         @id @default(cuid())
   name          String
