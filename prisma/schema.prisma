@@ -10,44 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Tenant {
-  id            String         @id @default(cuid())
-  name          String
-  country       String         // ISO code e.g., "TZ"
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  tier          SubscriptionTier @default(FREE)
-  addOns        Json?          // e.g., { "machineryTracking": true }
-  enableMarket  Boolean        @default(false) // Opt-in to Kilimo Market
-  users         User[]
-  subscriptions Subscription[]
-  farms         Farm[]
-  accounts      Account[]
-  crops         Crop[]
-  seasons       Season[]
-  activities    Activity[]
-  resources     ResourceInput[]
-  expenses      Expense[]
-  revenues      Revenue[]
-  journalEntries JournalEntry[]
-  marketPrices  MarketPrice[]
-  reminders     Reminder[]
-  machines      Machine[]
-  fuelLogs      FuelLog[]
-  trainings     TrainingSession[]
-  trainingAttendance TrainingAttendance[]
-  jobs          JobPosting[]
-  jobAssignments JobAssignment[]
-  activityUsages ActivityUsage[]
-  laborEntries  LaborEntry[]
-  machineUsages MachineUsage[]
 
-  // Marketplace (sister product)
-  listings            Listing[]
-  listingInventories  ListingInventory[]
-  listingInquiries    ListingInquiry[]
-  marketplaceFees     MarketplaceFee[]
-}
 
 enum SubscriptionTier {
   FREE
@@ -73,23 +36,6 @@ enum SubscriptionStatus {
   ACTIVE
   PAST_DUE
   CANCELED
-}
-
-model User {
-  id        String    @id @default(cuid())
-  tenantId  String
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email     String    @unique
-  name      String
-  phone     String?
-  role      UserRole  @default(ATTENDANT)
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  assignedActivities Activity[]
-  reminders Reminder[]
-  trainingAttendance TrainingAttendance[]
-  jobAssignments JobAssignment[]
 }
 
 enum UserRole {
@@ -619,4 +565,60 @@ model MarketplaceFee {
 enum FeeModel {
   COMMISSION
   BROKERAGE
+}
+
+model User {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email     String    @unique
+  name      String
+  phone     String?
+  role      UserRole  @default(ATTENDANT)
+  status    UserStatus @default(ACTIVE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  assignedActivities Activity[]
+  reminders Reminder[]
+  trainingAttendance TrainingAttendance[]
+  jobAssignments JobAssignment[]
+}
+
+model Tenant {
+  id            String         @id @default(cuid())
+  name          String
+  country       String         // ISO code e.g., "TZ"
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tier          SubscriptionTier @default(FREE)
+  addOns        Json?          // e.g., { "machineryTracking": true }
+  enableMarket  Boolean        @default(false) // Opt-in to Kilimo Market
+  users         User[]
+  subscriptions Subscription[]
+  farms         Farm[]
+  accounts      Account[]
+  crops         Crop[]
+  seasons       Season[]
+  activities    Activity[]
+  resources     ResourceInput[]
+  expenses      Expense[]
+  revenues      Revenue[]
+  journalEntries JournalEntry[]
+  marketPrices  MarketPrice[]
+  reminders     Reminder[]
+  machines      Machine[]
+  fuelLogs      FuelLog[]
+  trainings     TrainingSession[]
+  trainingAttendance TrainingAttendance[]
+  jobs          JobPosting[]
+  jobAssignments JobAssignment[]
+  activityUsages ActivityUsage[]
+  laborEntries  LaborEntry[]
+  machineUsages MachineUsage[]
+
+  // Marketplace (sister product)
+  listings            Listing[]
+  listingInventories  ListingInventory[]
+  listingInquiries    ListingInquiry[]
+  marketplaceFees     MarketplaceFee[]
 }
